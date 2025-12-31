@@ -18,7 +18,13 @@ const Chat = ({ user, onBack, initialChatUser }) => {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const newSocket = io(API_BASE_URL);
+    const newSocket = io(API_BASE_URL, {
+      transports: ['websocket', 'polling'],
+      upgrade: true,
+      rememberUpgrade: true,
+      timeout: 5000,
+      forceNew: true
+    });
     setSocket(newSocket);
 
     newSocket.on('connect', () => {

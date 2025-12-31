@@ -18,7 +18,9 @@ const io = socketIo(server, {
   cors: {
     origin: [FRONTEND_URL, "http://localhost:3000"],
     methods: ["GET", "POST"]
-  }
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
 });
 
 // Middleware
