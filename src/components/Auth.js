@@ -4,11 +4,7 @@ import axios from 'axios';
 import ImageUpload from './ImageUpload';
 import DropdownSelect from './DropdownSelect';
 import { EYE_COLORS, HAIR_COLORS, HAIR_STYLES, ETHNICITIES, RELIGIONS, EDUCATION_LEVELS, LANGUAGES } from './constants';
-
-// API Configuration
-// Production: https://blovely-backend.onrender.com
-// Local: http://localhost:5000
-const API_BASE_URL = 'https://blovely-backend.onrender.com';
+import { API_BASE_URL } from '../config';
 
 const Auth = ({ onAuth }) => {
   const [isLogin, setIsLogin] = useState(true);

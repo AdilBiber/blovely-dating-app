@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Heart, X, MessageCircle, RotateCcw, User } from 'lucide-react';
 import axios from 'axios';
-
-// API Configuration
-// Production: https://blovely-backend.onrender.com
-// Local: http://localhost:5000
-const API_BASE_URL = 'https://blovely-backend.onrender.com';
+import { API_BASE_URL } from '../config';
 
 const Likes = ({ user, onNavigate }) => {
   const [potentialMatches, setPotentialMatches] = useState([]);
