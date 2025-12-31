@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Heart, X, MessageCircle, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Heart, X, MessageCircle, RotateCcw, User } from 'lucide-react';
 import axios from 'axios';
 
 // API Configuration
