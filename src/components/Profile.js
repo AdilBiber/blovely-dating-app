@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { User, Edit2, Save, X, Camera, Trash2, Mail, MapPin } from 'lucide-react';
+import { User, Edit2, Save, X, Camera, Trash2, Mail, MapPin, MessageCircle } from 'lucide-react';
 import axios from 'axios';
+import ImageUpload from './ImageUpload';
+import DropdownSelect from './DropdownSelect';
+import { EYE_COLORS, HAIR_COLORS, HAIR_STYLES, ETHNICITIES, RELIGIONS, EDUCATION_LEVELS, LANGUAGES, COUNTRIES, MAJOR_CITIES } from './constants';
 
 // API Configuration
 // Production: https://blovely-backend.onrender.com
 // Local: http://localhost:5000
 const API_BASE_URL = 'https://blovely-backend.onrender.com';
-import ImageUpload from './ImageUpload';
-import DropdownSelect from './DropdownSelect';
-import { EYE_COLORS, HAIR_COLORS, HAIR_STYLES, ETHNICITIES, RELIGIONS, EDUCATION_LEVELS, LANGUAGES, COUNTRIES, MAJOR_CITIES } from './constants';
 
 const Profile = ({ user, setUser, selectedProfile, onChatOpen }) => {
   const [profile, setProfile] = useState({
