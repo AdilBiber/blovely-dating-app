@@ -7,6 +7,11 @@ import Likes from './components/Likes';
 import Navbar from './components/Navbar';
 import './App.css';
 
+// API Configuration
+// Production: https://blovely-backend.onrender.com
+// Local: http://localhost:5000
+export const API_BASE_URL = 'https://blovely-backend.onrender.com';
+
 function App() {
   const [user, setUser] = useState(null);
   const [currentPage, setCurrentPage] = useState('search');
@@ -42,7 +47,7 @@ function App() {
 
   const fetchUserData = async (token) => {
     try {
-      const response = await fetch('http://localhost:5000/api/profile', {
+      const response = await fetch(`${API_BASE_URL}/api/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();

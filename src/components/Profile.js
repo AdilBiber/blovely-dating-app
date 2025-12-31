@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Calendar, MapPin, Heart, Camera, Save, X, MessageCircle } from 'lucide-react';
+import { User, Edit2, Save, X, Camera, Trash2, Mail, MapPin } from 'lucide-react';
 import axios from 'axios';
+
+// API Configuration
+// Production: https://blovely-backend.onrender.com
+// Local: http://localhost:5000
+const API_BASE_URL = 'https://blovely-backend.onrender.com';
 import ImageUpload from './ImageUpload';
 import DropdownSelect from './DropdownSelect';
 import { EYE_COLORS, HAIR_COLORS, HAIR_STYLES, ETHNICITIES, RELIGIONS, EDUCATION_LEVELS, LANGUAGES, COUNTRIES, MAJOR_CITIES } from './constants';
@@ -168,7 +173,7 @@ const Profile = ({ user, setUser, selectedProfile, onChatOpen }) => {
         languages: Array.isArray(profile.languages) ? profile.languages : (profile.languages ? profile.languages.split(',').map(i => i.trim()).filter(i => i) : [])
       };
       
-      await axios.put('http://localhost:5000/api/profile', { profile: updatedProfile }, {
+      const response = await axios.put(`${API_BASE_URL}/api/profile`, { profile: updatedProfile }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -198,7 +203,7 @@ const Profile = ({ user, setUser, selectedProfile, onChatOpen }) => {
       console.log('Attempting to delete account...');
       console.log('Token exists:', !!token);
       
-      const response = await axios.delete('http://localhost:5000/api/account', {
+      const response = await axios.delete(`${API_BASE_URL}/api/account`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

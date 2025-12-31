@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Heart, MapPin, Calendar, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, User, MapPin, Filter, Heart, MessageCircle } from 'lucide-react';
 import axios from 'axios';
+
+// API Configuration
+// Production: https://blovely-backend.onrender.com
+// Local: http://localhost:5000
+const API_BASE_URL = 'https://blovely-backend.onrender.com';
 import DropdownSelect from './DropdownSelect';
 import { ETHNICITIES, RELIGIONS, COUNTRIES, MAJOR_CITIES } from './constants';
 
@@ -103,7 +108,7 @@ const SearchPage = ({ user, onChatOpen, onProfileOpen, selectedProfile }) => {
       if (filters.withPhotosOnly) queryParams.append('withPhotosOnly', 'true');
       if (filters.onlineOnly) queryParams.append('onlineOnly', 'true');
       
-      const response = await axios.get(`http://localhost:5000/api/search?${queryParams}`, {
+      const response = await axios.get(`${API_BASE_URL}/api/search?${queryParams}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUsers(response.data);

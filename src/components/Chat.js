@@ -3,6 +3,11 @@ import { Send, ArrowLeft, Search, User, Ban, UserCheck, Trash2 } from 'lucide-re
 import axios from 'axios';
 import io from 'socket.io-client';
 
+// API Configuration
+// Production: https://blovely-backend.onrender.com
+// Local: http://localhost:5000
+const API_BASE_URL = 'https://blovely-backend.onrender.com';
+
 const Chat = ({ user, onBack, initialChatUser }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -17,7 +22,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:5000');
+    const newSocket = io(API_BASE_URL);
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
@@ -71,7 +76,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
   const fetchBlockedUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/blocked-users', {
+      const response = await axios.get(`${API_BASE_URL}/api/blocked-users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBlockedUsers(response.data.map(user => user._id));
@@ -83,7 +88,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
   const fetchConversations = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/conversations', {
+      const response = await axios.get(`${API_BASE_URL}/api/conversations`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setConversations(response.data);
@@ -98,7 +103,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`http://localhost:5000/api/messages/${chatUser._id}`, {
+      const response = await axios.get(`${API_BASE_URL}/api/messages/${chatUser._id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(response.data);
@@ -141,7 +146,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
     
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:5000/api/block/${chatUser._id}`, {}, {
+      await axios.post(`${API_BASE_URL}/api/block/${chatUser._id}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       await fetchBlockedUsers(); // Refresh blocked users list
@@ -155,7 +160,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
     
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:5000/api/unblock/${chatUser._id}`, {}, {
+      await axios.post(`${API_BASE_URL}/api/unblock/${chatUser._id}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       await fetchBlockedUsers(); // Refresh blocked users list
@@ -169,7 +174,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
     try {
       const token = localStorage.getItem('token');
       console.log('Making API call to delete conversation...');
-      const response = await axios.delete(`http://localhost:5000/api/conversations/${userId}`, {
+      const response = await axios.delete(`${API_BASE_URL}/api/conversations/${userId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       console.log('Delete response:', response.data);
@@ -186,7 +191,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
   const handleDeleteMessage = async (messageId) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5000/api/messages/${messageId}`, {
+      await axios.delete(`${API_BASE_URL}/api/messages/${messageId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(messages.filter(msg => msg._id !== messageId));

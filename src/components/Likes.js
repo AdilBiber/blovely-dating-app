@@ -1,6 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Heart, X, MessageCircle, User } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Heart, X, MessageCircle, RotateCcw } from 'lucide-react';
 import axios from 'axios';
+
+// API Configuration
+// Production: https://blovely-backend.onrender.com
+// Local: http://localhost:5000
+const API_BASE_URL = 'https://blovely-backend.onrender.com';
 
 const Likes = ({ user, onNavigate }) => {
   const [potentialMatches, setPotentialMatches] = useState([]);
@@ -59,7 +64,7 @@ const Likes = ({ user, onNavigate }) => {
         queryParams.append('withPhotosOnly', 'true');
       }
       
-      const response = await axios.get(`http://localhost:5000/api/potential-matches?${queryParams}`, {
+      const response = await axios.get(`${API_BASE_URL}/api/potential-matches`, {params: queryParams}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPotentialMatches(response.data);
@@ -73,7 +78,7 @@ const Likes = ({ user, onNavigate }) => {
   const fetchMatches = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/matches', {
+      const response = await axios.get(`${API_BASE_URL}/api/matches`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMatches(response.data);
@@ -88,7 +93,7 @@ const Likes = ({ user, onNavigate }) => {
     const currentUser = potentialMatches[currentIndex];
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(`http://localhost:5000/api/like/${currentUser._id}`, {}, {
+      const response = await axios.post(`${API_BASE_URL}/api/like/${currentUser._id}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -111,7 +116,7 @@ const Likes = ({ user, onNavigate }) => {
     const currentUser = potentialMatches[currentIndex];
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:5000/api/pass/${currentUser._id}`, {}, {
+      await axios.post(`${API_BASE_URL}/api/pass/${currentUser._id}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       nextProfile();
