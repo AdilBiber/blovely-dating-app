@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Edit2, Save, X, Camera, Trash2, Mail, MapPin, MessageCircle } from 'lucide-react';
+import { User, Edit2, Save, X, Camera, Trash2, Mail, MapPin, MessageCircle, Heart, Calendar } from 'lucide-react';
 import axios from 'axios';
 import ImageUpload from './ImageUpload';
 import DropdownSelect from './DropdownSelect';
