@@ -5,12 +5,8 @@ import SearchPage from './components/Search';
 import Chat from './components/Chat';
 import Likes from './components/Likes';
 import Navbar from './components/Navbar';
+import { API_BASE_URL } from './config';
 import './App.css';
-
-// API Configuration
-// Production: https://blovely-backend.onrender.com
-// Local: http://localhost:5000
-export const API_BASE_URL = 'https://blovely-backend.onrender.com';
 
 function App() {
   const [user, setUser] = useState(null);

@@ -2,11 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, ArrowLeft, Search, User, Ban, UserCheck, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import io from 'socket.io-client';
-
-// API Configuration
-// Production: https://blovely-backend.onrender.com
-// Local: http://localhost:5000
-const API_BASE_URL = 'https://blovely-backend.onrender.com';
+import { API_BASE_URL } from '../config';
 
 const Chat = ({ user, onBack, initialChatUser }) => {
   const [messages, setMessages] = useState([]);
