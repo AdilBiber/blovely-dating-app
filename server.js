@@ -458,6 +458,13 @@ app.post('/api/forgot-password', async (req, res) => {
         return res.status(404).json({ message: 'Kein Benutzer mit dieser Telefonnummer gefunden' });
       }
       
+      // Check if user already has a pending password reset request
+      if (user.passwordResetRequested && user.passwordResetStatus === 'pending') {
+        return res.status(429).json({ 
+          message: 'Password reset request already pending. Please wait for the current request to be processed or contact support.' 
+        });
+      }
+      
       // Store password reset request in database
       user.passwordResetRequested = true;
       user.passwordResetMethod = phoneMethod;
@@ -479,6 +486,13 @@ app.post('/api/forgot-password', async (req, res) => {
       
       if (!user) {
         return res.status(404).json({ message: `Kein Benutzer mit dieser ${emailMethod === 'alternative' ? 'alternativen' : 'Haupt-'}E-Mail-Adresse gefunden` });
+      }
+      
+      // Check if user already has a pending password reset request
+      if (user.passwordResetRequested && user.passwordResetStatus === 'pending') {
+        return res.status(429).json({ 
+          message: 'Password reset request already pending. Please wait for the current request to be processed or contact support.' 
+        });
       }
       
       // Store password reset request in database
