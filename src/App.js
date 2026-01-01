@@ -5,6 +5,7 @@ import SearchPage from './components/Search';
 import Chat from './components/Chat';
 import Likes from './components/Likes';
 import Navbar from './components/Navbar';
+import SettingsPage from './components/SettingsPage';
 import { API_BASE_URL } from './config';
 import './App.css';
 
@@ -14,13 +15,21 @@ function App() {
   const [chatUser, setChatUser] = useState(null);
   const [selectedProfile, setSelectedProfile] = useState(null);
 
+  const [showFirstTimeHint, setShowFirstTimeHint] = useState(false);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
     
     if (token && savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
+        const userData = JSON.parse(savedUser);
+        setUser(userData);
+        
+        // Check if user has alternative email set
+        if (!userData.alternativeEmail) {
+          setShowFirstTimeHint(true);
+        }
       } catch (error) {
         console.error('Error parsing saved user:', error);
         localStorage.removeItem('token');
@@ -67,9 +76,26 @@ function App() {
     }
   };
 
+  const handleUserUpdate = (updatedUser) => {
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    
+    // Hide first time hint after user updates their profile
+    if (updatedUser.alternativeEmail) {
+      setShowFirstTimeHint(false);
+    }
+  };
+
   const handleAuth = (userData) => {
     setUser(userData);
-    setCurrentPage('search');
+    
+    // Check if user has alternative email set
+    if (!userData.alternativeEmail) {
+      setShowFirstTimeHint(true);
+      setCurrentPage('settings');
+    } else {
+      setCurrentPage('search');
+    }
   };
 
   const handleLogout = () => {
@@ -129,6 +155,8 @@ function App() {
         );
       case 'likes':
         return <Likes user={user} onNavigate={handleNavigate} />;
+      case 'settings':
+        return <SettingsPage user={user} onUserUpdate={handleUserUpdate} onLogout={handleLogout} showFirstTimeHint={showFirstTimeHint} />;
       case 'search':
       default:
         return currentPage === 'search' && <SearchPage user={user} onChatOpen={handleChatOpen} onProfileOpen={handleProfileOpen} selectedProfile={selectedProfile} />;

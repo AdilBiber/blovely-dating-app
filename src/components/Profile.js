@@ -185,44 +185,7 @@ const Profile = ({ user, setUser, selectedProfile, onChatOpen }) => {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone and will permanently delete your profile, messages, likes, and matches.')) {
-      return;
-    }
-    
-    if (!window.confirm('This is your final warning. All your data will be permanently deleted. Are you absolutely sure?')) {
-      return;
-    }
-    
-    try {
-      const token = localStorage.getItem('token');
-      console.log('Attempting to delete account...');
-      console.log('Token exists:', !!token);
-      
-      const response = await axios.delete(`${API_BASE_URL}/api/account`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      console.log('Delete response:', response.data);
-      
-      // Clear local storage and redirect to login
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-    } catch (error) {
-      console.error('Error deleting account:', error);
-      if (error.response) {
-        console.error('Error status:', error.response.status);
-        console.error('Error data:', error.response.data);
-      } else if (error.request) {
-        console.error('No response received:', error.request);
-      } else {
-        console.error('Request error:', error.message);
-      }
-      alert('Error deleting account. Please check the console for details and try again.');
-    }
-  };
-
+  
   const handleCancel = () => {
     if (user) {
       setProfile({
@@ -285,12 +248,6 @@ const Profile = ({ user, setUser, selectedProfile, onChatOpen }) => {
                   className="bg-white text-primary-600 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors"
                 >
                   Edit Profile
-                </button>
-                <button
-                  onClick={handleDeleteAccount}
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors"
-                >
-                  Delete Account
                 </button>
               </div>
             ) : null}

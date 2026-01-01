@@ -159,7 +159,7 @@ const SearchPage = ({ user, onChatOpen, onProfileOpen, selectedProfile }) => {
                 onClick={() => onProfileOpen(null)}
                 className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
               >
-                Back to My Profile
+                Back to Profile
               </button>
             )}
             <button
