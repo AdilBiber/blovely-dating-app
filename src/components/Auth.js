@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Heart, Mail, Lock, User, Calendar, MapPin, Camera, Google } from 'lucide-react';
+import { User, Lock, Mail, Phone, Eye, EyeOff, Heart, Calendar } from 'lucide-react';
+import PhoneAuth from './PhoneAuth';
+import ForgotPasswordPage from './ForgotPasswordPage';
 import axios from 'axios';
-import ImageUpload from './ImageUpload';
-import DropdownSelect from './DropdownSelect';
-import { EYE_COLORS, HAIR_COLORS, HAIR_STYLES, ETHNICITIES, RELIGIONS, EDUCATION_LEVELS, LANGUAGES } from './constants';
 import { API_BASE_URL } from '../config';
 
 const Auth = ({ onAuth }) => {
+  const [authMethod, setAuthMethod] = useState('email'); // 'email' or 'phone'
   const [isLogin, setIsLogin] = useState(true);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -73,7 +74,6 @@ const Auth = ({ onAuth }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const endpoint = isLogin ? '/api/login' : '/api/register';
       const data = isLogin 
         ? { email: formData.email, password: formData.password }
         : { 
@@ -88,7 +88,7 @@ const Auth = ({ onAuth }) => {
             }
           };
       
-      const response = await axios.post(`${API_BASE_URL}/api/register`, data);
+      const response = await axios.post(`${API_BASE_URL}${isLogin ? '/api/login' : '/api/register'}`, data);
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       onAuth(response.data.user);
@@ -102,15 +102,56 @@ const Auth = ({ onAuth }) => {
     window.open(`${API_BASE_URL}/auth/google`, '_self');
   };
 
+  // If phone auth is selected, show PhoneAuth component
+  if (authMethod === 'phone') {
+    return <PhoneAuth onAuth={onAuth} />;
+  }
+
+  // If forgot password is selected, show ForgotPasswordPage
+  if (showForgotPassword) {
+    return <ForgotPasswordPage onBack={() => setShowForgotPassword(false)} />;
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-red-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+        {/* Auth Method Toggle */}
+        <div className="flex mb-8 bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setAuthMethod('email')}
+            className={`flex-1 py-2 px-4 rounded-md transition-colors ${
+              authMethod === 'email'
+                ? 'bg-white text-pink-500 shadow-sm'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <Mail className="w-4 h-4 inline mr-2" />
+            Email
+          </button>
+          <button
+            onClick={() => setAuthMethod('phone')}
+            className={`flex-1 py-2 px-4 rounded-md transition-colors ${
+              authMethod === 'phone'
+                ? 'bg-white text-pink-500 shadow-sm'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <Phone className="w-4 h-4 inline mr-2" />
+            Phone
+          </button>
+        </div>
+
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-500 rounded-full mb-4">
-            <Heart className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">BLovely</h1>
-          <p className="text-gray-600 mt-2">Find your perfect match</p>
+          <Heart className="w-16 h-16 text-pink-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800">
+            {isLogin ? 'Welcome Back' : 'Join Blovely'}
+          </h2>
+          <p className="text-gray-600 mt-2">
+            {isLogin 
+              ? 'Sign in to your account' 
+              : 'Create your account to start matching'
+            }
+          </p>
         </div>
 
         <button
@@ -163,8 +204,11 @@ const Auth = ({ onAuth }) => {
               value={formData.password}
               onChange={handleChange}
               required
+              minLength={6}
+              pattern="^(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{6,}$"
+              title="Min. 6 Zeichen: 1 Großbuchstabe, 1 Sonderzeichen (@$!%*?&)"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="••••••••"
+              placeholder="Password (min. 6 Zeichen, 1 Großbuchstabe, 1 Sonderzeichen)"
             />
           </div>
 
@@ -217,380 +261,6 @@ const Auth = ({ onAuth }) => {
                   <option value="other">Other</option>
                 </select>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <MapPin className="w-4 h-4 inline mr-1" />
-                  Location
-                </label>
-                <input
-                  type="text"
-                  name="profile.location"
-                  value={formData.profile.location}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="City, Country"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
-                <textarea
-                  name="profile.bio"
-                  value={formData.profile.bio}
-                  onChange={handleChange}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="Tell us about yourself..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Interests</label>
-                <input
-                  type="text"
-                  name="profile.interests"
-                  value={formData.profile.interests}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="Music, Travel, Sports (comma separated)"
-                />
-              </div>
-
-              {/* Körperliche Merkmale */}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Physical Details</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Height (cm)</label>
-                    <input
-                      type="number"
-                      name="profile.height"
-                      value={formData.profile.height}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="175"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg)</label>
-                    <input
-                      type="number"
-                      name="profile.weight"
-                      value={formData.profile.weight}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="70"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Body Type</label>
-                    <select
-                      name="profile.bodyType"
-                      value={formData.profile.bodyType}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value="slim">Slim</option>
-                      <option value="athletic">Athletic</option>
-                      <option value="average">Average</option>
-                      <option value="curvy">Curvy</option>
-                      <option value="heavyset">Heavyset</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Hair Color</label>
-                    <DropdownSelect
-                      options={HAIR_COLORS}
-                      value={formData.profile.hairColor}
-                      onChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, hairColor: value }
-                      }))}
-                      placeholder="Select hair color"
-                      allowOther={true}
-                      otherValue={formData.profile.customHairColor}
-                      onOtherChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, customHairColor: value }
-                      }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Eye Color</label>
-                    <DropdownSelect
-                      options={EYE_COLORS}
-                      value={formData.profile.eyeColor}
-                      onChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, eyeColor: value }
-                      }))}
-                      placeholder="Select eye color"
-                      allowOther={true}
-                      otherValue={formData.profile.customEyeColor}
-                      onOtherChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, customEyeColor: value }
-                      }))}
-                    />
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Hair Style</label>
-                  <DropdownSelect
-                    options={HAIR_STYLES}
-                    value={formData.profile.hairStyle}
-                    onChange={(value) => setFormData(prev => ({
-                      ...prev,
-                      profile: { ...prev.profile, hairStyle: value }
-                    }))}
-                    placeholder="Select hair style"
-                    allowOther={true}
-                    otherValue={formData.profile.customHairStyle}
-                    onOtherChange={(value) => setFormData(prev => ({
-                      ...prev,
-                      profile: { ...prev.profile, customHairStyle: value }
-                    }))}
-                  />
-                </div>
-              </div>
-              {/* Persönliche Merkmale */}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Personal Details</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ethnicity</label>
-                    <DropdownSelect
-                      options={ETHNICITIES}
-                      value={formData.profile.ethnicity}
-                      onChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, ethnicity: value }
-                      }))}
-                      placeholder="Select ethnicity"
-                      allowOther={true}
-                      otherValue={formData.profile.customEthnicity}
-                      onOtherChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, customEthnicity: value }
-                      }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
-                    <DropdownSelect
-                      options={RELIGIONS}
-                      value={formData.profile.religion}
-                      onChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, religion: value }
-                      }))}
-                      placeholder="Select religion"
-                      allowOther={true}
-                      otherValue={formData.profile.customReligion}
-                      onOtherChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, customReligion: value }
-                      }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Languages</label>
-                  <DropdownSelect
-                    options={LANGUAGES}
-                    value={formData.profile.languages}
-                    onChange={(value) => setFormData(prev => ({
-                      ...prev,
-                      profile: { ...prev.profile, languages: value }
-                    }))}
-                    placeholder="Select languages"
-                    multiSelect={true}
-                    allowOther={true}
-                    otherValue={formData.profile.customLanguages}
-                    onOtherChange={(value) => setFormData(prev => ({
-                      ...prev,
-                      profile: { ...prev.profile, customLanguages: value }
-                    }))}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Marital Status</label>
-                    <select
-                      name="profile.maritalStatus"
-                      value={formData.profile.maritalStatus}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value="single">Single</option>
-                      <option value="married">Married</option>
-                      <option value="divorced">Divorced</option>
-                      <option value="widowed">Widowed</option>
-                      <option value="separated">Separated</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Smoking</label>
-                    <select
-                      name="profile.smoking"
-                      value={formData.profile.smoking}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value="never">Never</option>
-                      <option value="occasionally">Occasionally</option>
-                      <option value="regularly">Regularly</option>
-                      <option value="trying_to_quit">Trying to quit</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Drinking</label>
-                    <select
-                      name="profile.drinking"
-                      value={formData.profile.drinking}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value="never">Never</option>
-                      <option value="occasionally">Occasionally</option>
-                      <option value="regularly">Regularly</option>
-                      <option value="socially">Socially</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Children</label>
-                    <div className="flex gap-4 mt-2">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          name="profile.hasChildren"
-                          checked={formData.profile.hasChildren}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            profile: { ...prev.profile, hasChildren: e.target.checked }
-                          }))}
-                          className="mr-2"
-                        />
-                        Have children
-                      </label>
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          name="profile.wantsChildren"
-                          checked={formData.profile.wantsChildren}
-                          onChange={(e) => setFormData(prev => ({
-                            ...prev,
-                            profile: { ...prev.profile, wantsChildren: e.target.checked }
-                          }))}
-                          className="mr-2"
-                        />
-                        Want children
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Beruf & Bildung */}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Career & Education</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Profession</label>
-                    <input
-                      type="text"
-                      name="profile.profession"
-                      value={formData.profile.profession}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="Software Engineer"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Education</label>
-                    <DropdownSelect
-                      options={EDUCATION_LEVELS}
-                      value={formData.profile.education}
-                      onChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, education: value }
-                      }))}
-                      placeholder="Select education level"
-                      allowOther={true}
-                      otherValue={formData.profile.customEducation}
-                      onOtherChange={(value) => setFormData(prev => ({
-                        ...prev,
-                        profile: { ...prev.profile, customEducation: value }
-                      }))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Standort */}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Location</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-                    <input
-                      type="text"
-                      name="profile.country"
-                      value={formData.profile.country}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="Germany"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                    <input
-                      type="text"
-                      name="profile.city"
-                      value={formData.profile.city}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="Berlin"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      <MapPin className="w-4 h-4 inline mr-1" />
-                      Location
-                    </label>
-                    <input
-                      type="text"
-                      name="profile.location"
-                      value={formData.profile.location}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="Berlin, Germany"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Photo Upload */}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Photos</h3>
-                <ImageUpload
-                  images={formData.profile.photos || []}
-                  onImagesChange={(newPhotos) => setFormData(prev => ({
-                    ...prev,
-                    profile: { ...prev.profile, photos: newPhotos }
-                  }))}
-                  maxImages={5}
-                />
-              </div>
             </>
           )}
 
@@ -602,13 +272,21 @@ const Auth = ({ onAuth }) => {
           </button>
         </form>
 
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center space-y-3">
           <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-primary-500 hover:text-primary-600 font-medium"
+            onClick={() => setShowForgotPassword(true)}
+            className="text-primary-500 hover:text-primary-600 font-medium text-sm"
           >
-            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            Forgot Password?
           </button>
+          <div>
+            <button
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-primary-500 hover:text-primary-600 font-medium"
+            >
+              {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

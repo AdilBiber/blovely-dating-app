@@ -1,12 +1,13 @@
 import React from 'react';
-import { Heart, Search, MessageCircle, User, LogOut } from 'lucide-react';
+import { Heart, Search, MessageCircle, User, LogOut, Settings } from 'lucide-react';
 
 const Navbar = ({ user, currentPage, onNavigate, onLogout, selectedProfile }) => {
   const navItems = [
     { id: 'search', label: 'Discover', icon: Search },
     { id: 'likes', label: 'Likes', icon: Heart },
     { id: 'chat', label: 'Messages', icon: MessageCircle },
-    { id: 'profile', label: 'Profil', icon: User },
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   return (

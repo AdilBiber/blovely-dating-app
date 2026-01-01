@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, X, MessageCircle, RotateCcw, User } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Heart, X, MessageCircle, User } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 
@@ -10,16 +10,31 @@ const Likes = ({ user, onNavigate }) => {
   const [loading, setLoading] = useState(false);
   const [showMatchNotification, setShowMatchNotification] = useState(false);
   const [currentMatchUser, setCurrentMatchUser] = useState(null);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchPotentialMatches();
-    fetchMatches();
-  }, []);
-
-  const fetchPotentialMatches = async () => {
+  const fetchPotentialMatches = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No token found in localStorage');
+        setError('No authentication token found. Please login again.');
+        return;
+      }
+      
+      console.log('Making API call with token:', token.substring(0, 20) + '...');
+      
+      // First test if server is working
+      try {
+        const testResponse = await axios.get(`${API_BASE_URL}/api/test`);
+        console.log('Server test successful:', testResponse.data);
+      } catch (testError) {
+        console.error('Server test failed:', testError);
+        setError('Server is not responding. Please try again later.');
+        return;
+      }
       
       // Build query parameters from user's search preferences
       const queryParams = new URLSearchParams();
@@ -56,70 +71,144 @@ const Likes = ({ user, onNavigate }) => {
       
       // If no preferences are set, add default parameters to get some results
       if (queryParams.toString() === '') {
-        // Default: show users with photos only to ensure good experience
-        queryParams.append('withPhotosOnly', 'true');
+        // Only show users with photos if user has explicitly set this preference
+        // Otherwise show all profiles like Discover
+        if (user?.profile?.searchPreferences?.withPhotosOnly) {
+          queryParams.append('withPhotosOnly', 'true');
+        }
       }
       
-      const response = await axios.get(`${API_BASE_URL}/api/potential-matches`, {params: queryParams}, {
-        headers: { Authorization: `Bearer ${token}` }
+      // Make the API call with proper error handling
+      const response = await axios.get(`${API_BASE_URL}/api/potential-matches?token=${token}`, {
+        params: queryParams,
+        timeout: 10000 // 10 second timeout
       });
+      
+      console.log('API response successful, found users:', response.data.length);
       setPotentialMatches(response.data);
     } catch (error) {
       console.error('Error fetching potential matches:', error);
+      
+      // Handle different types of errors
+      if (error.code === 'ECONNABORTED') {
+        setError('Request timeout. Please check your connection and try again.');
+      } else if (error.response) {
+        console.error('Error details:', error.response.status, error.response.data);
+        if (error.response.status === 401) {
+          console.error('Token expired or invalid - please login again');
+          setError('Your session has expired. Please login again.');
+        } else {
+          setError('Failed to load profiles. Please try again.');
+        }
+      } else if (error.request) {
+        setError('Network error. Please check your connection.');
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const fetchMatches = async () => {
+  const fetchMatches = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/api/matches`, {
-        headers: { Authorization: `Bearer ${token}` }
+      
+      if (!token) {
+        console.error('No token found in localStorage');
+        return;
+      }
+      
+      const response = await axios.get(`${API_BASE_URL}/api/matches?token=${token}`, {
+        timeout: 10000 // 10 second timeout
       });
       setMatches(response.data);
     } catch (error) {
       console.error('Error fetching matches:', error);
+      if (error.response?.status === 401) {
+        console.error('Token expired or invalid - please login again');
+        setError('Your session has expired. Please login again.');
+      } else if (error.code === 'ECONNABORTED') {
+        setError('Request timeout. Please check your connection.');
+      } else {
+        setError('Failed to load matches. Please try again.');
+      }
     }
-  };
+  }, []);
 
-  const handleLike = async () => {
+  useEffect(() => {
+    // Only fetch if user is available
+    if (user) {
+      fetchPotentialMatches();
+      fetchMatches();
+    }
+  }, [fetchPotentialMatches, fetchMatches, user]);
+
+  const handleLike = useCallback(async () => {
     if (currentIndex >= potentialMatches.length) return;
     
     const currentUser = potentialMatches[currentIndex];
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(`${API_BASE_URL}/api/like/${currentUser._id}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
+      
+      if (!token) {
+        console.error('No token found in localStorage');
+        return;
+      }
+      
+      const response = await axios.post(`${API_BASE_URL}/api/like/${currentUser._id}?token=${token}`, {}, {
+        timeout: 10000 // 10 second timeout
       });
 
       if (response.data.isMatch) {
         setCurrentMatchUser(currentUser);
         setShowMatchNotification(true);
         setTimeout(() => setShowMatchNotification(false), 3000);
-        fetchMatches(); // Refresh matches list
       }
-
-      nextProfile();
+      
+      // Move to next profile
+      setCurrentIndex(currentIndex + 1);
     } catch (error) {
       console.error('Error liking user:', error);
+      if (error.response?.status === 401) {
+        console.error('Token expired or invalid - please login again');
+        setError('Your session has expired. Please login again.');
+      } else if (error.code === 'ECONNABORTED') {
+        setError('Request timeout. Please try again.');
+      } else {
+        setError('Failed to like profile. Please try again.');
+      }
     }
-  };
+  }, [currentIndex, potentialMatches]);
 
-  const handlePass = async () => {
+  const handlePass = useCallback(async () => {
     if (currentIndex >= potentialMatches.length) return;
     
     const currentUser = potentialMatches[currentIndex];
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${API_BASE_URL}/api/pass/${currentUser._id}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
+      
+      if (!token) {
+        console.error('No token found in localStorage');
+        return;
+      }
+      
+      await axios.post(`${API_BASE_URL}/api/pass/${currentUser._id}?token=${token}`, {}, {
+        timeout: 10000 // 10 second timeout
       });
       nextProfile();
     } catch (error) {
       console.error('Error passing user:', error);
+      if (error.response?.status === 401) {
+        console.error('Token expired or invalid - please login again');
+        setError('Your session has expired. Please login again.');
+      } else if (error.code === 'ECONNABORTED') {
+        setError('Request timeout. Please try again.');
+      } else {
+        setError('Failed to pass profile. Please try again.');
+      }
     }
-  };
+  }, [currentIndex, potentialMatches]);
 
   const nextProfile = () => {
     setCurrentIndex(prev => prev + 1);
@@ -131,7 +220,7 @@ const Likes = ({ user, onNavigate }) => {
     } else if (direction === 'left') {
       handlePass();
     }
-  }, [currentIndex]);
+  }, [handleLike, handlePass]);
 
   const handleTouchStart = (e) => {
     const touchStart = e.targetTouches[0].clientX;
@@ -255,6 +344,19 @@ const Likes = ({ user, onNavigate }) => {
               Keep Swiping
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-800 text-sm">{error}</p>
+          <button
+            onClick={() => setError('')}
+            className="mt-2 text-red-600 text-sm underline hover:no-underline"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 

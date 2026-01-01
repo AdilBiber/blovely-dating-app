@@ -10,7 +10,14 @@ const jwt = require('jsonwebtoken');
 const http = require('http');
 const { MONGODB_URI, GOOGLE_CALLBACK_URL, FRONTEND_URL } = require('./src/config');
 const socketIo = require('socket.io');
+const admin = require('firebase-admin');
 require('dotenv').config();
+
+// Firebase Admin Setup (optional für echte SMS)
+const serviceAccount = require('./firebase-service-account.json');
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -24,7 +31,11 @@ const io = socketIo(server, {
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [FRONTEND_URL, "http://localhost:3000"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(session({
   secret: process.env.JWT_SECRET || 'blovely-secret',
@@ -42,9 +53,18 @@ mongoose.connect(MONGODB_URI, {
 
 // User Schema
 const UserSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
+  email: { type: String, unique: true, sparse: true },
   password: { type: String },
   googleId: { type: String },
+  phoneNumber: { type: String, unique: true, sparse: true },
+  phonePassword: { type: String, required: function() { return this.phoneNumber; } },
+  pinAttempts: { type: Number, default: 0 },
+  alternativeEmail: { type: String, unique: true, sparse: true },
+  passwordResetRequested: { type: Boolean, default: false },
+  passwordResetMethod: { type: String }, // 'email', 'whatsapp', 'line', 'alternative-email'
+  passwordResetRequestedAt: { type: Date },
+  passwordResetStatus: { type: String, default: null }, // 'pending', 'sent', 'completed'
+  passwordResetEmailType: { type: String }, // 'primary' or 'alternative'
   profile: {
     name: { type: String, required: true },
     age: { type: Number, required: true },
@@ -204,6 +224,20 @@ app.post('/api/register', async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
     }
+    
+    // Password validation
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+    
+    if (!/(?=.*[A-Z])/.test(password)) {
+      return res.status(400).json({ message: 'Password must contain at least 1 uppercase letter' });
+    }
+    
+    if (!/(?=.*[^A-Za-z0-9])/.test(password)) {
+      return res.status(400).json({ message: 'Password must contain at least 1 special character' });
+    }
+    
     const hashedPassword = await bcrypt.hash(password, 12);
     const user = new User({
       email,
@@ -247,7 +281,14 @@ app.get('/auth/google/callback',
 );
 
 const authMiddleware = (req, res, next) => {
-  const token = req.header('Authorization')?.replace('Bearer ', '');
+  // Try to get token from Authorization header first
+  let token = req.header('Authorization')?.replace('Bearer ', '');
+  
+  // If no token in header, try to get from query parameters
+  if (!token) {
+    token = req.query.token;
+  }
+  
   if (!token) {
     return res.status(401).json({ message: 'No token provided' });
   }
@@ -259,6 +300,386 @@ const authMiddleware = (req, res, next) => {
     res.status(401).json({ message: 'Invalid token' });
   }
 };
+
+// Settings Routes
+app.put('/api/user/alternative-email', authMiddleware, async (req, res) => {
+  try {
+    const { alternativeEmail } = req.body;
+    const userId = req.userId;
+
+    // Get current user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if alternative email is already used by another user
+    if (alternativeEmail) {
+      const existingUser = await User.findOne({ 
+        alternativeEmail, 
+        _id: { $ne: userId } 
+      });
+      if (existingUser) {
+        return res.status(400).json({ message: 'Alternative email already in use' });
+      }
+    }
+
+    // Update alternative email
+    user.alternativeEmail = alternativeEmail || null;
+    await user.save();
+
+    res.json({ 
+      message: 'Alternative email updated successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        alternativeEmail: user.alternativeEmail,
+        profile: user.profile
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/user/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.userId;
+
+    // Get current user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify current password
+    if (user.password) {
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ message: 'Invalid current password' });
+      }
+    } else if (user.phonePassword) {
+      const isMatch = await bcrypt.compare(currentPassword, user.phonePassword);
+      if (!isMatch) {
+        return res.status(400).json({ message: 'Invalid current password' });
+      }
+    } else {
+      return res.status(400).json({ message: 'No password set' });
+    }
+
+    // Password validation for new password
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+    
+    if (!/(?=.*[A-Z])/.test(newPassword)) {
+      return res.status(400).json({ message: 'Password must contain at least 1 uppercase letter' });
+    }
+    
+    if (!/(?=.*[^A-Za-z0-9])/.test(newPassword)) {
+      return res.status(400).json({ message: 'Password must contain at least 1 special character' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    // Update password based on user type
+    if (user.password) {
+      user.password = hashedPassword;
+    } else if (user.phonePassword) {
+      user.phonePassword = hashedPassword;
+    }
+
+    await user.save();
+
+    res.json({ 
+      message: 'Password changed successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        alternativeEmail: user.alternativeEmail,
+        profile: user.profile
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/api/user/delete-account', authMiddleware, async (req, res) => {
+  try {
+    const { password } = req.body;
+    const userId = req.userId;
+
+    // Get current user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify password
+    if (user.password) {
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ message: 'Invalid password' });
+      }
+    } else if (user.phonePassword) {
+      const isMatch = await bcrypt.compare(password, user.phonePassword);
+      if (!isMatch) {
+        return res.status(400).json({ message: 'Invalid password' });
+      }
+    } else {
+      return res.status(400).json({ message: 'No password set' });
+    }
+
+    // Delete user and all related data
+    await User.findByIdAndDelete(userId);
+
+    res.json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Forgot Password Route
+app.post('/api/forgot-password', async (req, res) => {
+  try {
+    const { method, phoneNumber, email, phoneMethod, emailMethod } = req.body;
+    
+    let user;
+    
+    if (method === 'phone') {
+      // Find user by phone number
+      user = await User.findOne({ phoneNumber });
+      if (!user) {
+        return res.status(404).json({ message: 'Kein Benutzer mit dieser Telefonnummer gefunden' });
+      }
+      
+      // Store password reset request in database
+      user.passwordResetRequested = true;
+      user.passwordResetMethod = phoneMethod;
+      user.passwordResetRequestedAt = new Date();
+      user.passwordResetStatus = 'pending'; // 'pending', 'sent', 'completed'
+      await user.save();
+      
+      console.log(`Password reset request for ${phoneNumber} via ${phoneMethod} - Status: pending`);
+      
+      res.json({ 
+        message: `Deine Anfrage auf Passwort-Zurücksetzung per ${phoneMethod === 'whatsapp' ? 'WhatsApp' : phoneMethod === 'line' ? 'Line' : 'alternativer E-Mail'} wurde gespeichert. Wir werden dein neues Passwort so schnell wie möglich senden.` 
+      });
+      
+    } else if (method === 'email') {
+      // Find user by email or alternative email based on selection
+      let emailField = emailMethod === 'alternative' ? 'alternativeEmail' : 'email';
+      
+      user = await User.findOne({ [emailField]: email });
+      
+      if (!user) {
+        return res.status(404).json({ message: `Kein Benutzer mit dieser ${emailMethod === 'alternative' ? 'alternativen' : 'Haupt-'}E-Mail-Adresse gefunden` });
+      }
+      
+      // Store password reset request in database
+      user.passwordResetRequested = true;
+      user.passwordResetMethod = 'email';
+      user.passwordResetRequestedAt = new Date();
+      user.passwordResetStatus = 'pending'; // 'pending', 'sent', 'completed'
+      user.passwordResetEmailType = emailMethod; // 'primary' or 'alternative'
+      await user.save();
+      
+      console.log(`Password reset request for ${email} (${emailMethod}) - Status: pending`);
+      
+      res.json({ 
+        message: `Deine Anfrage auf Passwort-Zurücksetzung an deine ${emailMethod === 'alternative' ? 'alternative' : 'Haupt-'}E-Mail-Adresse wurde gespeichert. Wir werden dein neues Passwort so schnell wie möglich senden.` 
+      });
+    } else {
+      return res.status(400).json({ message: 'Ungültige Methode' });
+    }
+    
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Reset Password Route (for admin use - when password is actually sent)
+app.post('/api/reset-password', async (req, res) => {
+  try {
+    const { userId, newPassword } = req.body;
+    
+    // Find user by ID
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Password validation
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+    
+    if (!/(?=.*[A-Z])/.test(newPassword)) {
+      return res.status(400).json({ message: 'Password must contain at least 1 uppercase letter' });
+    }
+    
+    if (!/(?=.*[^A-Za-z0-9])/.test(newPassword)) {
+      return res.status(400).json({ message: 'Password must contain at least 1 special character' });
+    }
+    
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    
+    // Update password based on user type
+    if (user.password) {
+      user.password = hashedPassword;
+    } else if (user.phonePassword) {
+      user.phonePassword = hashedPassword;
+    }
+    
+    // Update reset status
+    user.passwordResetStatus = 'completed';
+    user.passwordResetRequested = false;
+    
+    await user.save();
+    
+    res.json({ message: 'Passwort wurde erfolgreich zurückgesetzt' });
+    
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Admin Route to view pending password reset requests
+app.get('/api/admin/password-reset-requests', async (req, res) => {
+  try {
+    const pendingRequests = await User.find({
+      passwordResetRequested: true,
+      passwordResetStatus: 'pending'
+    }).select('email phoneNumber alternativeEmail passwordResetMethod passwordResetRequestedAt passwordResetEmailType profile.name');
+    
+    res.json(pendingRequests);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Admin Route to mark request as sent
+app.put('/api/admin/password-reset-requests/:userId/sent', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    user.passwordResetStatus = 'sent';
+    await user.save();
+    
+    res.json({ message: 'Request marked as sent' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Phone Authentication Routes
+app.post('/api/register-phone-password', async (req, res) => {
+  try {
+    const { phoneNumber, password, profile } = req.body;
+    
+    // Check if phone number already exists
+    const existingUser = await User.findOne({ phoneNumber });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Phone number already registered' });
+    }
+    
+    // Password validation
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+    
+    if (!/(?=.*[A-Z])/.test(password)) {
+      return res.status(400).json({ message: 'Password must contain at least 1 uppercase letter' });
+    }
+    
+    if (!/(?=.*[^A-Za-z0-9])/.test(password)) {
+      return res.status(400).json({ message: 'Password must contain at least 1 special character' });
+    }
+    
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+    
+    // Create new user with phone number and password
+    const user = new User({
+      phoneNumber,
+      phonePassword: hashedPassword,
+      profile
+    });
+    
+    await user.save();
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'blovely-secret');
+    
+    res.status(201).json({ 
+      message: 'Account created successfully',
+      token, 
+      user: { 
+        id: user._id, 
+        phoneNumber: user.phoneNumber, 
+        profile: user.profile 
+      } 
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/login-phone-password', async (req, res) => {
+  try {
+    const { phoneNumber, password } = req.body;
+    
+    // Find user by phone number
+    const user = await User.findOne({ phoneNumber });
+    if (!user) {
+      return res.status(400).json({ message: 'Phone number not registered' });
+    }
+    
+    // Check if account is locked (3 failed attempts)
+    if (user.pinAttempts >= 3) {
+      return res.status(400).json({ message: 'Account locked due to too many failed attempts' });
+    }
+    
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.phonePassword);
+    if (!isMatch) {
+      user.pinAttempts += 1;
+      await user.save();
+      
+      if (user.pinAttempts >= 3) {
+        return res.status(400).json({ message: 'Account locked due to too many failed attempts' });
+      }
+      
+      return res.status(400).json({ message: 'Invalid password' });
+    }
+    
+    // Reset attempts on successful login
+    user.pinAttempts = 0;
+    await user.save();
+    
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'blovely-secret');
+    
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        phoneNumber: user.phoneNumber, 
+        profile: user.profile 
+      } 
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
 app.get('/api/profile', authMiddleware, async (req, res) => {
   try {
@@ -489,6 +910,11 @@ app.delete('/api/messages/:messageId', authMiddleware, async (req, res) => {
   }
 });
 
+// Test endpoint without auth
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Server is working!', timestamp: new Date().toISOString() });
+});
+
 // Likes/Matches APIs
 app.get('/api/potential-matches', authMiddleware, async (req, res) => {
   try {
@@ -500,6 +926,10 @@ app.get('/api/potential-matches', authMiddleware, async (req, res) => {
     } = req.query;
     
     const currentUser = await User.findById(req.userId);
+    
+    // Debug: Log current user and search params
+    console.log('Current user:', currentUser._id, 'Gender:', currentUser.profile.gender, 'InterestedIn:', currentUser.profile.interestedIn);
+    console.log('Search params:', req.query);
     
     let query = { _id: { $ne: req.userId } };
     
@@ -515,10 +945,7 @@ app.get('/api/potential-matches', authMiddleware, async (req, res) => {
       query['profile.gender'] = gender;
     }
     
-    // Filter by interestedIn - only show users who are interested in current user's gender
-    if (currentUser.profile.interestedIn && currentUser.profile.interestedIn !== 'all') {
-      query['profile.interestedIn'] = currentUser.profile.gender;
-    }
+    // Note: Removed interestedIn filter to show same results as Discover/Search
     
     if (country) {
       query['profile.country'] = new RegExp(country, 'i');
@@ -579,6 +1006,9 @@ app.get('/api/potential-matches', authMiddleware, async (req, res) => {
       query['profile.isOnline'] = true;
     }
     
+    // Debug: Log final query
+    console.log('Final query:', JSON.stringify(query, null, 2));
+    
     // Exclude blocked users and users who blocked current user
     const blockedByOthers = await User.find({ blockedUsers: req.userId }).select('_id');
     const blockedUserIds = [
@@ -592,6 +1022,8 @@ app.get('/api/potential-matches', authMiddleware, async (req, res) => {
     
     // Get users and shuffle for variety
     const users = await User.find(query).select('-password -googleId');
+    console.log('Found users:', users.length);
+    
     const shuffled = users.sort(() => 0.5 - Math.random());
     
     res.json(shuffled);
