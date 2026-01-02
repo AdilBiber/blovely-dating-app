@@ -57,6 +57,8 @@ function App() {
       });
       const data = await response.json();
       
+      console.log('API Response:', data); // DEBUG
+      
       // Decode token to get user ID
       const tokenPayload = JSON.parse(atob(token.split('.')[1]));
       
@@ -64,10 +66,13 @@ function App() {
       const userData = {
         id: tokenPayload.userId,
         _id: tokenPayload.userId,
-        email: data.profile.email || 'google-user@gmail.com',
+        email: data.email || data.profile.email || 'google-user@gmail.com',
+        alternativeEmail: data.alternativeEmail,
         googleId: data.profile.googleId,
         profile: data.profile
       };
+      
+      console.log('User Data:', userData); // DEBUG
       
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -92,7 +97,7 @@ function App() {
     // Check if user has alternative email set
     if (!userData.alternativeEmail) {
       setShowFirstTimeHint(true);
-      setCurrentPage('settings');
+      setCurrentPage('search'); // Gehe zur Startseite, nicht zu Settings
     } else {
       setCurrentPage('search');
     }
