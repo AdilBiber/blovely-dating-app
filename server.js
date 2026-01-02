@@ -63,7 +63,7 @@ const UserSchema = new mongoose.Schema({
   passwordResetRequested: { type: Boolean, default: false },
   passwordResetMethod: { type: String }, // 'email', 'whatsapp', 'line', 'alternative-email'
   passwordResetRequestedAt: { type: Date },
-  passwordResetStatus: { type: String, default: null }, // 'pending', 'sent', 'completed'
+  passwordResetStatus: { type: String, default: null }, // 'pending', 'done'
   passwordResetEmailType: { type: String }, // 'primary' or 'alternative'
   profile: {
     name: { type: String, required: true },
@@ -552,7 +552,7 @@ app.post('/api/reset-password', async (req, res) => {
     }
     
     // Update reset status
-    user.passwordResetStatus = 'completed';
+    user.passwordResetStatus = 'done';
     user.passwordResetRequested = false;
     
     await user.save();
@@ -578,8 +578,8 @@ app.get('/api/admin/password-reset-requests', async (req, res) => {
   }
 });
 
-// Admin Route to mark request as sent
-app.put('/api/admin/password-reset-requests/:userId/sent', async (req, res) => {
+// Admin Route to mark request as done
+app.put('/api/admin/password-reset-requests/:userId/done', async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -588,10 +588,10 @@ app.put('/api/admin/password-reset-requests/:userId/sent', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
     
-    user.passwordResetStatus = 'sent';
+    user.passwordResetStatus = 'done';
     await user.save();
     
-    res.json({ message: 'Request marked as sent' });
+    res.json({ message: 'Request marked as done' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -961,11 +961,11 @@ app.get('/api/potential-matches', authMiddleware, async (req, res) => {
       if (ageMax) query['profile.age'].$lte = parseInt(ageMax);
     }
     
-    if (gender && gender !== 'all') {
+    if (currentUser.profile.interestedIn && currentUser.profile.interestedIn !== 'all') {
+      query['profile.gender'] = currentUser.profile.interestedIn;
+    } else if (gender && gender !== 'all') {
       query['profile.gender'] = gender;
     }
-    
-    // Note: Removed interestedIn filter to show same results as Discover/Search
     
     if (country) {
       query['profile.country'] = new RegExp(country, 'i');
