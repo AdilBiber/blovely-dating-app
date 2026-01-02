@@ -458,6 +458,13 @@ app.post('/api/forgot-password', async (req, res) => {
         return res.status(404).json({ message: 'Kein Benutzer mit dieser Telefonnummer gefunden' });
       }
       
+      // Check if user is a Google OAuth user - they cannot reset password
+      if (user.googleId && !user.phonePassword) {
+        return res.status(400).json({ 
+          message: 'Google OAuth users cannot reset password. Please use Google to login.' 
+        });
+      }
+      
       // Check if user already has a pending password reset request
       if (user.passwordResetRequested && user.passwordResetStatus === 'pending') {
         return res.status(429).json({ 
@@ -486,6 +493,13 @@ app.post('/api/forgot-password', async (req, res) => {
       
       if (!user) {
         return res.status(404).json({ message: `Kein Benutzer mit dieser ${emailMethod === 'alternative' ? 'alternativen' : 'Haupt-'}E-Mail-Adresse gefunden` });
+      }
+      
+      // Check if user is a Google OAuth user - they cannot reset password
+      if (user.googleId && !user.password) {
+        return res.status(400).json({ 
+          message: 'Google OAuth users cannot reset password. Please use Google to login.' 
+        });
       }
       
       // Check if user already has a pending password reset request
