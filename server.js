@@ -687,6 +687,8 @@ app.post('/api/login-phone-password', async (req, res) => {
       user: { 
         id: user._id, 
         phoneNumber: user.phoneNumber, 
+        email: user.email,
+        alternativeEmail: user.alternativeEmail,
         profile: user.profile 
       } 
     });
@@ -698,7 +700,11 @@ app.post('/api/login-phone-password', async (req, res) => {
 app.get('/api/profile', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    res.json({ profile: user.profile });
+    res.json({ 
+      profile: user.profile,
+      email: user.email,
+      alternativeEmail: user.alternativeEmail
+    });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
