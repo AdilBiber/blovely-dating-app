@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowLeft, Search, User, Ban, UserCheck, Trash2 } from 'lucide-react';
+import { Send, ArrowLeft, Search, User, Ban, UserCheck, Trash2, ArrowUpRight, ArrowDownLeft, Mail } from 'lucide-react';
 import axios from 'axios';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../config';
@@ -41,6 +41,41 @@ const Chat = ({ user, onBack, initialChatUser }) => {
       if (chatUser && (message.sender._id === chatUser._id || message.receiver._id === chatUser._id)) {
         setMessages(prev => [...prev, message]);
       }
+      
+      // Update the conversation list immediately with the new message
+      setConversations(prev => {
+        const updatedConversations = [...prev];
+        const partnerId = message.sender._id === userId ? message.receiver._id : message.sender._id;
+        const conversationIndex = updatedConversations.findIndex(conv => conv.user._id === partnerId);
+        
+        // Mark as unread if it's a received message and we're not currently in that chat
+        const isReceivedMessage = message.sender._id !== userId;
+        const isNotInCurrentChat = !chatUser || chatUser._id !== partnerId;
+        
+        if (isReceivedMessage && isNotInCurrentChat) {
+          message.read = false;
+        }
+        
+        if (conversationIndex !== -1) {
+          updatedConversations[conversationIndex] = {
+            ...updatedConversations[conversationIndex],
+            lastMessage: message
+          };
+        } else {
+          // If conversation doesn't exist, add it
+          const partnerUser = message.sender._id === userId ? message.receiver : message.sender;
+          updatedConversations.push({
+            user: partnerUser,
+            lastMessage: message,
+            unreadCount: 0
+          });
+        }
+        
+        // Sort by timestamp (most recent first)
+        return updatedConversations.sort((a, b) => 
+          new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp)
+        );
+      });
     });
 
     return () => newSocket.close();
@@ -70,6 +105,13 @@ const Chat = ({ user, onBack, initialChatUser }) => {
       fetchBlockedUsers();
     }
   }, [user]);
+
+  // Refresh conversations whenever the conversation list is shown
+  useEffect(() => {
+    if (showConversationList && user) {
+      fetchConversations();
+    }
+  }, [showConversationList, user]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -109,6 +151,8 @@ const Chat = ({ user, onBack, initialChatUser }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(response.data);
+      // Mark messages as read when opening chat
+      markMessagesAsRead(chatUser._id);
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -128,6 +172,10 @@ const Chat = ({ user, onBack, initialChatUser }) => {
     try {
       socket.emit('sendMessage', messageData);
       setNewMessage('');
+      // Wait a moment for the message to be saved, then refresh conversations
+      setTimeout(() => {
+        fetchConversations();
+      }, 500);
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -141,6 +189,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
     setShowConversationList(true);
     setChatUser(null);
     setMessages([]);
+    fetchConversations(); // Refresh conversations when returning to list
   };
 
   const handleBlockUser = async () => {
@@ -202,6 +251,56 @@ const Chat = ({ user, onBack, initialChatUser }) => {
     }
   };
 
+  const markMessagesAsRead = async (userId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/api/messages/read/${userId}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  };
+
+  const markMessageAsUnread = async (messageId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/api/messages/unread/${messageId}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Update local state to reflect the change
+      setMessages(messages.map(msg => 
+        msg._id === messageId ? { ...msg, read: false } : msg
+      ));
+      // Update conversations list as well
+      fetchConversations();
+    } catch (error) {
+      console.error('Error marking message as unread:', error);
+    }
+  };
+
+  const markConversationAsUnread = async () => {
+    if (!chatUser) return;
+    
+    // Check if the last message was sent by current user
+    const lastMessage = conversations.find(conv => conv.user._id === chatUser._id)?.lastMessage;
+    if (lastMessage && lastMessage.sender._id === (user._id || user.id || user.googleId)) {
+      alert('You cannot mark a conversation as unread when the last message was sent by you.');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE_URL}/api/conversations/unread/${chatUser._id}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Update conversations list
+      fetchConversations();
+    } catch (error) {
+      console.error('Error marking conversation as unread:', error);
+    }
+  };
+
   if (showConversationList) {
     return (
       <div className="max-w-4xl mx-auto p-6">
@@ -251,10 +350,10 @@ const Chat = ({ user, onBack, initialChatUser }) => {
                     className="flex items-center gap-3 flex-1 cursor-pointer"
                   >
                     <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
-                      {conversation.user.profile.photos && conversation.user.profile.photos.length > 0 ? (
+                      {conversation.user?.profile?.photos && conversation.user.profile.photos.length > 0 ? (
                         <img
                           src={conversation.user.profile.photos[0]}
-                          alt={conversation.user.profile.name}
+                          alt={conversation.user?.profile?.name || 'Unknown User'}
                           className="w-full h-full rounded-full object-cover"
                         />
                       ) : (
@@ -262,13 +361,40 @@ const Chat = ({ user, onBack, initialChatUser }) => {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">{conversation.user.profile.name}</h3>
-                      <p className="text-sm text-gray-600 truncate">
-                        {conversation.lastMessage.content}
+                      <h3 className="font-semibold text-gray-900 truncate">{conversation.user?.profile?.name || 'Unknown User'}</h3>
+                      <p className="text-sm text-gray-600 truncate flex items-center gap-1">
+                        {conversation.lastMessage?.sender?._id === (user._id || user.id || user.googleId) ? (
+                          <ArrowUpRight className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                        ) : (
+                          <ArrowDownLeft className={`w-3 h-3 flex-shrink-0 ${
+                            conversation.lastMessage?.read ? 'text-green-500' : 'text-green-600 font-bold'
+                          }`} />
+                        )}
+                        <span className={
+                          conversation.lastMessage?.sender?._id !== (user._id || user.id || user.googleId) && 
+                          !conversation.lastMessage?.read ? 'font-bold text-gray-900' : ''
+                        }>
+                          {conversation.lastMessage?.content || 'No content'}
+                        </span>
                       </p>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {new Date(conversation.lastMessage.createdAt).toLocaleDateString()}
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        if (!conversation.lastMessage || !conversation.lastMessage.sender) return null;
+                        
+                        const isReceivedMessage = conversation.lastMessage.sender._id !== (user._id || user.id || user.googleId);
+                        const isUnread = isReceivedMessage && !conversation.lastMessage.read;
+                        
+                        return isUnread && (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 animate-pulse"></div>
+                        );
+                      })()}
+                      <div className="text-xs text-gray-500">
+                        {conversation.lastMessage?.timestamp ? 
+                          new Date(conversation.lastMessage.timestamp).toLocaleDateString() : 
+                          'No date'
+                        }
+                      </div>
                     </div>
                   </div>
                   <button
@@ -276,7 +402,7 @@ const Chat = ({ user, onBack, initialChatUser }) => {
                       e.stopPropagation();
                       handleDeleteConversation(conversation.user._id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                     title="Delete Conversation"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -320,6 +446,13 @@ const Chat = ({ user, onBack, initialChatUser }) => {
                 </p>
               </div>
             </div>
+            <button
+              onClick={markConversationAsUnread}
+              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+              title="Mark Conversation as Unread"
+            >
+              <Mail className="w-5 h-5" />
+            </button>
             <button
               onClick={() => {
                 const isBlocked = chatUser && blockedUsers.includes(chatUser._id);
@@ -373,15 +506,15 @@ const Chat = ({ user, onBack, initialChatUser }) => {
                         day: 'numeric'
                       })}
                     </p>
-                    {message.sender._id === user.id && (
+                    {message.sender._id === user.id ? (
                       <button
                         onClick={() => handleDeleteMessage(message._id)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full transition-opacity hover:bg-red-600"
                         title="Delete Message"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ))}

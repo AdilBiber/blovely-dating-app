@@ -131,7 +131,8 @@ const MessageSchema = new mongoose.Schema({
   sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   content: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now }
+  timestamp: { type: Date, default: Date.now },
+  read: { type: Boolean, default: false }
 });
 
 const User = mongoose.model('User', UserSchema);
@@ -865,7 +866,7 @@ app.get('/api/conversations', authMiddleware, async (req, res) => {
         { sender: req.userId },
         { receiver: req.userId }
       ]
-    }).populate('sender receiver', 'profile.name profile.photos').sort({ createdAt: -1 });
+    }).populate('sender receiver', 'profile.name profile.photos').sort({ timestamp: -1 });
 
     // Group by conversation partner and get latest message
     const conversations = {};
@@ -874,10 +875,22 @@ app.get('/api/conversations', authMiddleware, async (req, res) => {
         ? message.receiver._id.toString() 
         : message.sender._id.toString();
       
-      if (!conversations[partnerId] || message.createdAt > conversations[partnerId].createdAt) {
+      if (!conversations[partnerId] || message.timestamp > conversations[partnerId].lastMessage.timestamp) {
+        // For sent messages, always mark as read (since you sent them)
+        // For received messages, use the actual read status
+        const isReceivedMessage = message.sender._id.toString() !== req.userId;
+        const effectiveReadStatus = isReceivedMessage ? message.read : true;
+        
         conversations[partnerId] = {
           user: message.sender._id.toString() === req.userId ? message.receiver : message.sender,
-          lastMessage: message,
+          lastMessage: {
+            _id: message._id,
+            sender: message.sender,
+            receiver: message.receiver,
+            content: message.content,
+            timestamp: message.timestamp,
+            read: effectiveReadStatus
+          },
           unreadCount: 0
         };
       }
@@ -1160,6 +1173,72 @@ app.get('/api/matches', authMiddleware, async (req, res) => {
     res.json(matchedUsers);
   } catch (err) {
     console.error('Error fetching matches:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Mark messages as read API
+app.put('/api/messages/read/:userId', authMiddleware, async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+    const currentUserId = req.userId;
+    
+    await Message.updateMany(
+      { 
+        sender: targetUserId, 
+        receiver: currentUserId, 
+        read: false 
+      },
+      { read: true }
+    );
+    
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Mark message as unread API
+app.put('/api/messages/unread/:messageId', authMiddleware, async (req, res) => {
+  try {
+    const messageId = req.params.messageId;
+    const currentUserId = req.userId;
+    
+    const message = await Message.findOne({ _id: messageId, receiver: currentUserId });
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found or not authorized' });
+    }
+    
+    message.read = false;
+    await message.save();
+    
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Mark conversation as unread API
+app.put('/api/conversations/unread/:userId', authMiddleware, async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+    const currentUserId = req.userId;
+    
+    // Mark all messages between current user and target user as unread
+    // This includes both sent and received messages
+    await Message.updateMany(
+      { 
+        $or: [
+          { sender: targetUserId, receiver: currentUserId },
+          { sender: currentUserId, receiver: targetUserId }
+        ],
+        read: true 
+      },
+      { read: false }
+    );
+    
+    res.json({ success: true });
+  } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
